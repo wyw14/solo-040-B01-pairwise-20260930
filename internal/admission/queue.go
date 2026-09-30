@@ -14,7 +14,7 @@ type QueueEntry struct {
 	Released bool         `json:"released"`
 }
 
-// Queue preserves FIFO order while supporting convoy cancellation recovery.
+// Queue preserves FIFO order of convoy vessels waiting for admission.
 type Queue struct {
 	mu      sync.RWMutex
 	entries map[string][]QueueEntry
@@ -71,18 +71,6 @@ func (q *Queue) RemovePlan(chamberID string, planID uuid.UUID) []QueueEntry {
 	}
 	q.entries[chamberID] = append([]QueueEntry(nil), kept...)
 	return removed
-}
-
-func (q *Queue) Restore(chamberID string, entries []QueueEntry) {
-	q.mu.Lock()
-	current := q.entries[chamberID]
-	restored := make([]QueueEntry, 0, len(entries)+len(current))
-	for _, entry := range entries {
-		entry.Released = false
-		restored = append(restored, entry)
-	}
-	q.entries[chamberID] = append(restored, current...)
-	q.mu.Unlock()
 }
 
 func (q *Queue) List(chamberID string) []QueueEntry {
