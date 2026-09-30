@@ -54,7 +54,13 @@ func (p *Publisher) Publish(ctx context.Context, cycle model.TransitCycle, vesse
 	return publication, nil
 }
 
+// Compensate reverts every published signal, in reverse order. It is atomic:
+// if any rollback or its audit event cannot be recorded, the signal store is
+// restored to exactly what it held before this call and the joined error is
+// returned. The caller therefore keeps its prior state and may retry the same
+// publication until compensation succeeds.
 func (p *Publisher) Compensate(ctx context.Context, chamberID string, publication Publication) error {
+	before := p.store.Snapshot()
 	var combined error
 	for index := len(publication.Published) - 1; index >= 0; index-- {
 		vesselID := publication.Published[index]
@@ -63,10 +69,16 @@ func (p *Publisher) Compensate(ctx context.Context, chamberID string, publicatio
 		} else {
 			p.store.Remove(vesselID)
 		}
-		_, err := p.recorder.Record(ctx, chamberID, model.EventSignalChanged, publication.CycleID, publication.Generation, map[string]any{
+		if _, err := p.recorder.Record(ctx, chamberID, model.EventSignalChanged, publication.CycleID, publication.Generation, map[string]any{
 			"vessel_id": vesselID, "compensated": true,
-		})
-		combined = errors.Join(combined, err)
+		}); err != nil {
+			combined = errors.Join(combined, err)
+			break
+		}
 	}
-	return combined
+	if combined != nil {
+		p.store.Restore(before)
+		return errors.Join(errors.New("signal compensation failed"), combined)
+	}
+	return nil
 }

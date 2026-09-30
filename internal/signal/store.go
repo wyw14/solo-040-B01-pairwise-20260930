@@ -41,6 +41,30 @@ func (s *Store) Remove(vesselID uuid.UUID) {
 	s.mu.Unlock()
 }
 
+// Snapshot returns a deep copy of every current signal state.
+func (s *Store) Snapshot() map[uuid.UUID]model.SignalState {
+	s.mu.RLock()
+	snapshot := make(map[uuid.UUID]model.SignalState, len(s.states))
+	for vesselID, state := range s.states {
+		snapshot[vesselID] = state
+	}
+	s.mu.RUnlock()
+	return snapshot
+}
+
+// Restore replaces all signal state with the given snapshot. A nil snapshot
+// clears the store. Used to roll back a partially applied compensation so the
+// caller can keep its prior state and retry the operation.
+func (s *Store) Restore(snapshot map[uuid.UUID]model.SignalState) {
+	restored := make(map[uuid.UUID]model.SignalState, len(snapshot))
+	for vesselID, state := range snapshot {
+		restored[vesselID] = state
+	}
+	s.mu.Lock()
+	s.states = restored
+	s.mu.Unlock()
+}
+
 func (s *Store) List() []model.SignalState {
 	s.mu.RLock()
 	result := make([]model.SignalState, 0, len(s.states))

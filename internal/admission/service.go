@@ -45,8 +45,10 @@ func (s *Service) RemovePlan(chamberID string, plan model.ConvoyPlan) []QueueEnt
 	return s.controller.queue.RemovePlan(chamberID, plan.ID)
 }
 
-func (s *Service) Restore(chamberID string, entries []QueueEntry) {
-	s.controller.queue.Restore(chamberID, entries)
+// RestorePlan rolls back a RemovePlan call, rebuilding the original FIFO order
+// without reviving released vessels or duplicating entries that are back.
+func (s *Service) RestorePlan(chamberID string, entries []QueueEntry) {
+	s.controller.queue.RestorePlan(chamberID, entries)
 }
 
 func (s *Service) List(chamberID string) []QueueEntry {
